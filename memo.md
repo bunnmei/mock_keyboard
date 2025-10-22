@@ -11,3 +11,5 @@ $ probe-rs run --chip nrf52840_xxAA target/thumbv7em-none-eabihf/release/nrf_pro
 
 $ probe-rs list でプローブがUSB接続されているか確認できすr
 $ prove-rs info 接続されているデバッグ可能デバイスが確認できる。
+
+https://nicekeyboards.com/docs/nice-nano/pinout-schematic
