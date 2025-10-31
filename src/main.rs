@@ -1,76 +1,66 @@
 #![no_std]
 #![no_main]
 
-use defmt::info;
 use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Level, Output, OutputDrive, Input, Pull};
 use embassy_time::{Duration, Timer};
 use {defmt_rtt as _, panic_probe as _};
+use defmt::*;
+use core::sync::atomic::{AtomicBool, Ordering};
+use usbd_hid::descriptor::{KeyboardReport};
+
+use embassy_nrf::{bind_interrupts, pac, peripherals, usb};
+
+// mod usb;
+mod keyboard;
+mod lusb;
+
+// --- 割り込み定義 ---
+// (usbモジュール内で InterruptHandler を使うため pub(crate) に)
+bind_interrupts!(pub struct Irqs {
+    USBD => usb::InterruptHandler<peripherals::USBD>;
+    CLOCK_POWER => usb::vbus_detect::InterruptHandler;
+});
+
+// --- グローバル変数 (タスク間通信用) ---
+
+/// キーボードタスクからUSBタスクへコマンドを送るためのチャネル
+pub static KEY_COMMAND_CHANNEL: embassy_sync::channel::Channel<
+    embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex,
+    KeyboardReport,
+    4, // キューのサイズ (4つまでバッファリング可能)
+> = embassy_sync::channel::Channel::new();
+
+/// USBのサスペンド状態を共有する
+pub static SUSPENDED: AtomicBool = AtomicBool::new(false);
 
 #[embassy_executor::main]
-async fn main(_spawner: Spawner) {
+async fn main(spawner: Spawner) {
     let p = embassy_nrf::init(Default::default());
     let mut led: Output<'_> = Output::new(p.P0_15, Level::Low, OutputDrive::Standard);
+    let keyboard_pins = keyboard::KeyboardPins::new(
+        p.P0_29,
+        p.P0_02,
+        p.P1_15,
+        p.P1_13,
+        p.P1_11,
+        p.P1_04,
+        p.P1_06,
+        p.P0_09,
+        p.P0_10,
+    );
 
-   let mut cols = [
-        Output::new(p.P0_29, Level::Low, OutputDrive::Standard), // High -> Low
-        Output::new(p.P0_02, Level::Low, OutputDrive::Standard), // High -> Low
-        Output::new(p.P1_15, Level::Low, OutputDrive::Standard), // High -> Low
-        Output::new(p.P1_13, Level::Low, OutputDrive::Standard), // High -> Low
-        Output::new(p.P1_11, Level::Low, OutputDrive::Standard), // High -> Low
-    ];
-    let rows= [
-        Input::new(p.P1_04, Pull::Down), // Up -> Down
-        Input::new(p.P1_06, Pull::Down), // Up -> Down
-        // Input::new(p.P0_09, Pull::Down),
-        // Input::new(p.P0_10, Pull::Down),
-    ];
 
-    // let mut col0: Output<'_> = Output::new(p.P0_29, Level::High, OutputDrive::Standard);
-
-    // let row0 = Input::new(p.P1_04, Pull::Up);
-    led.set_high();
-    Timer::after_millis(300).await;
+    spawner.spawn(lusb::usb_task(p.USBD)).unwrap();
+    spawner.spawn(keyboard::keyboard_task(keyboard_pins)).unwrap();
 
     loop {
-        // col0.set_low();
-        // if row0.is_low() {
-        //     info!("row low")
-        // } else {
-        //     info!("row high")
-        // }
+        Timer::after(Duration::from_micros(1000)).await;
 
-        // Timer::after_millis(300).await;
-        let mut state = [[false; 5]; 2];
-
-        for(ci, col) in cols.iter_mut().enumerate() {
-            col.set_high();
-
-            Timer::after(Duration::from_micros(50)).await;
-
-            for(ri, row) in rows.iter().enumerate() {
-                if row.is_high() { // is_low() -> is_high()
-                    state[ri][ci] = true;
-                    // info!("Key pressed: row={} col={}", ri, ci);
-                }
-            }
-
-            col.set_low();
-        }
-
-        for (ri, row) in state.iter().enumerate() {
-            for (ci, &pressed) in row.iter().enumerate() {
-                if pressed {
-                    info!("Key pressed: row={} col={}", ri, ci);
-                }
-            }
-        }
-
-        Timer::after(Duration::from_millis(20)).await;
-
-        
-        // led.set_low();
-        // Timer::after_millis(300).await;
-        // info!("loop");
+        // let k =  KEY_COMMAND_CHANNEL.receive().await;
+        // info!("Received keycode: {}", k.keycodes[0]);
+    
     }
+    
+
 }
