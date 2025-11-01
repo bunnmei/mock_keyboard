@@ -3,7 +3,7 @@ use embassy_nrf::
   peripherals::{P0_09, P0_29, P1_04, P1_06, P1_11, P1_13, P1_15, P0_02, P0_10}};
 use defmt::*;
 use embassy_time::{Timer, Duration};
-use keycode::{ KeyMap, KeyMappingId};
+use keycode::{KeyMap, KeyMappingId};
 use usbd_hid::descriptor::{KeyboardReport};
 
 use crate::KEY_COMMAND_CHANNEL;
@@ -110,7 +110,7 @@ pub async fn keyboard_task(mut keypins: KeyboardPins) {
                 if pressed {
                     // 押された瞬間
                     if !key.pressed {
-                        // info!("TAP: row={} col={}", ri, ci); //ここでキーを送る
+                        info!("TAP: row={} col={}", ri, ci); //ここでキーを送る
                         let key_map = KeyMap::from(KEY_MAP[ri][ci]);
                         let usb_code = key_map.usb; 
                         // info!("USB Keycode: {}", usb_code);
