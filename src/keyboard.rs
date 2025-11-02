@@ -110,7 +110,7 @@ pub async fn keyboard_task(mut keypins: KeyboardPins) {
                 if pressed {
                     // 押された瞬間
                     if !key.pressed {
-                        // info!("TAP: row={} col={}", ri, ci); //ここでキーを送る
+                        info!("TAP: row={} col={}", ri, ci); //ここでキーを送る
                         let key_map = KeyMap::from(KEY_MAP[ri][ci]);
                         let usb_code = key_map.usb; 
                         // info!("USB Keycode: {}", usb_code);
